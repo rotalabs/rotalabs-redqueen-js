@@ -3,6 +3,8 @@
  * the evolution loop. The RNG draw order mirrors the Python implementation
  * exactly so seeded runs reproduce the same archive across languages.
  */
+import { readFileSync, writeFileSync } from "node:fs";
+import { canonicalJson } from "./canonical.ts";
 import { Rng } from "./rng.ts";
 import {
   BehaviorDescriptor,
@@ -236,6 +238,32 @@ export class MapElitesArchive {
     const idx = rng.choice(all.length, n, false) as number[];
     return idx.map((i) => all[i].genome);
   }
+
+  save(uri: string): void {
+    const path = uri.startsWith("file://") ? uri.slice("file://".length) : uri;
+    writeFileSync(path, canonicalJson(this.toDict()) + "\n");
+  }
+
+  static load(uri: string, genomeClass: GenomeClass): MapElitesArchive {
+    const path = uri.startsWith("file://") ? uri.slice("file://".length) : uri;
+    const data = JSON.parse(readFileSync(path, "utf8")) as {
+      dimensions: { name: string; min: number; max: number; bins: number }[];
+      cells: { coords: number[]; elite: Record<string, any> }[];
+    };
+    const dims = data.dimensions.map((d) => new BehaviorDimension(d.name, d.min, d.max, d.bins));
+    const archive = new MapElitesArchive(dims);
+    for (const cell of data.cells) {
+      const e = cell.elite;
+      const ind = new Individual(
+        genomeClass.fromDict(e.genome),
+        new FitnessValue(e.fitness.value, e.fitness.objectives ?? null),
+        new BehaviorDescriptor(e.behavior.values),
+        e.generation,
+      );
+      archive.cells.set(cell.coords.join(","), { coords: cell.coords, ind });
+    }
+    return archive;
+  }
 }
 
 export interface EvolveOptions {
@@ -320,4 +348,109 @@ function createOffspring(
     offspring.push(child);
   }
   return offspring.slice(0, nOffspring);
+}
+
+// --- Competitive co-evolution -------------------------------------------------
+
+export interface CoevolutionResult {
+  bestAttacker: Genome;
+  bestDefender: Genome;
+  attackerFitness: number;
+  defenderFitness: number;
+  generations: number;
+  history: { generation: number; best_attacker_fitness: number; best_defender_fitness: number }[];
+}
+
+export interface CoevolveOptions {
+  generations: number;
+  populationSize?: number;
+  elitism?: number;
+  mutationRate?: number;
+  crossoverRate?: number;
+  tournamentSize?: number;
+  seed?: number;
+}
+
+function bestIndividual(individuals: Individual[]): Individual {
+  let best = individuals[0];
+  for (let i = 1; i < individuals.length; i++) {
+    if (individuals[i].fitness.value > best.fitness.value) best = individuals[i];
+  }
+  return best;
+}
+
+function breed(
+  individuals: Individual[],
+  rng: Rng,
+  populationSize: number,
+  elitism: number,
+  mutationRate: number,
+  crossoverRate: number,
+  tournamentSize: number,
+): Genome[] {
+  const pop = new Population(individuals);
+  const selection = new TournamentSelection(tournamentSize);
+  const offspring: Genome[] = [];
+  const nOffspring = populationSize - elitism;
+  while (offspring.length < nOffspring) {
+    const parents = selection.select(pop, 2, rng);
+    const p1 = parents[0].genome;
+    const p2 = parents[1].genome;
+    let child = rng.random() < crossoverRate ? p1.crossover(p2, rng) : p1;
+    if (rng.random() < mutationRate) child = child.mutate(rng);
+    offspring.push(child);
+  }
+  const elite = pop.topN(elitism).map((i) => i.genome);
+  return elite.concat(offspring).slice(0, populationSize);
+}
+
+export async function coevolve(
+  attackerClass: GenomeClass,
+  defenderClass: GenomeClass,
+  attackerFitnessVs: (defender: Genome) => Fitness,
+  defenderFitnessVs: (attacker: Genome) => Fitness,
+  opts: CoevolveOptions,
+): Promise<CoevolutionResult> {
+  const populationSize = opts.populationSize ?? 20;
+  const elitism = opts.elitism ?? 1;
+  const mutationRate = opts.mutationRate ?? 0.3;
+  const crossoverRate = opts.crossoverRate ?? 0.7;
+  const tournamentSize = opts.tournamentSize ?? 3;
+  const rng = new Rng(opts.seed ?? Math.floor(Math.random() * 0x7fffffff));
+
+  let attackers: Genome[] = [];
+  for (let i = 0; i < populationSize; i++) attackers.push(attackerClass.random(rng));
+  let defenders: Genome[] = [];
+  for (let i = 0; i < populationSize; i++) defenders.push(defenderClass.random(rng));
+
+  let champAttacker = attackers[0];
+  let champDefender = defenders[0];
+  let bestA = 0;
+  let bestD = 0;
+  const history: CoevolutionResult["history"] = [];
+
+  for (let gen = 0; gen < opts.generations; gen++) {
+    const aResults = await attackerFitnessVs(champDefender).evaluateBatch(attackers);
+    const dResults = await defenderFitnessVs(champAttacker).evaluateBatch(defenders);
+    const aInds = attackers.map((g, i) => Individual.fromResult(g, aResults[i], gen));
+    const dInds = defenders.map((g, i) => Individual.fromResult(g, dResults[i], gen));
+    const ba = bestIndividual(aInds);
+    const bd = bestIndividual(dInds);
+    champAttacker = ba.genome;
+    champDefender = bd.genome;
+    bestA = ba.fitness.value;
+    bestD = bd.fitness.value;
+    history.push({ generation: gen, best_attacker_fitness: bestA, best_defender_fitness: bestD });
+    attackers = breed(aInds, rng, populationSize, elitism, mutationRate, crossoverRate, tournamentSize);
+    defenders = breed(dInds, rng, populationSize, elitism, mutationRate, crossoverRate, tournamentSize);
+  }
+
+  return {
+    bestAttacker: champAttacker,
+    bestDefender: champDefender,
+    attackerFitness: bestA,
+    defenderFitness: bestD,
+    generations: opts.generations,
+    history,
+  };
 }

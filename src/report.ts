@@ -2,6 +2,7 @@
  * Compliance report: projection of a quality-diversity archive over the taxonomy.
  * Mirrors `rotalabs_redqueen.core.report`.
  */
+import { canonicalJson } from "./canonical.ts";
 import type { ArchiveCoverage } from "./engine.ts";
 import { atlasIds, owaspIds, type TaxonomyLabel } from "./taxonomy.ts";
 import { type Individual, SPEC_VERSION } from "./types.ts";
@@ -110,5 +111,42 @@ export class ReportExporter {
     };
 
     return new Report(campaignId, summary, byHarmCategory, standards, evidence);
+  }
+
+  render(report: Report, fmt: "json" | "markdown" = "json"): Uint8Array {
+    if (fmt === "json") return new TextEncoder().encode(canonicalJson(report.toDict()) + "\n");
+    if (fmt === "markdown") return new TextEncoder().encode(this.markdown(report));
+    throw new Error(`Unknown report format: ${fmt}`);
+  }
+
+  private markdown(report: Report): string {
+    const s = report.summary as Record<string, number>;
+    const lines = [
+      `# Adversarial Testing Report — ${report.campaignId}`,
+      "",
+      `- Attacks found: **${s.attacks_found}** of ${s.evaluated} evaluated`,
+    ];
+    if ("coverage_percent" in s) {
+      lines.push(`- Archive coverage: **${(s.coverage_percent as number).toFixed(1)}%** (${s.filled_cells} cells)`);
+    }
+    lines.push("", "## By harm category", "");
+    for (const row of report.byHarmCategory as { harm_category: string; count: number; max_score: number }[]) {
+      lines.push(`- \`${row.harm_category}\`: ${row.count} (max score ${row.max_score.toFixed(2)})`);
+    }
+    lines.push("", "## Standards coverage", "");
+    const std = report.standards as Record<string, any>;
+    for (const o of std.owasp as { id: string; evidence_count: number }[]) {
+      lines.push(`- OWASP \`${o.id}\` — ${o.evidence_count} evidence item(s)`);
+    }
+    for (const a of std.mitre_atlas as { id: string; evidence_count: number }[]) {
+      lines.push(`- MITRE ATLAS \`${a.id}\` — ${a.evidence_count} evidence item(s)`);
+    }
+    lines.push(
+      "",
+      `- EU AI Act Art. 55 adversarial testing documented: **${std.eu_ai_act_art55.adversarial_testing_documented}**`,
+      `- NIST AI RMF GOVERN 1.7: **${std.nist_ai_rmf.govern_1_7}**`,
+      "",
+    );
+    return lines.join("\n");
   }
 }

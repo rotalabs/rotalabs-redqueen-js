@@ -26,8 +26,16 @@ export {
   BehaviorDimension,
   MapElitesArchive,
   evolve,
+  coevolve,
 } from "./engine.ts";
-export type { Selection, EvolveOptions, EvolutionResult, ArchiveCoverage } from "./engine.ts";
+export type {
+  Selection,
+  EvolveOptions,
+  EvolutionResult,
+  ArchiveCoverage,
+  CoevolutionResult,
+  CoevolveOptions,
+} from "./engine.ts";
 export {
   ATTACK_STRATEGIES,
   ENCODINGS,
@@ -42,6 +50,10 @@ export {
   MockTarget,
   HeuristicJudge,
   JailbreakFitness,
+  MultiTargetFitness,
+  SystemPromptDefense,
+  DefendedTarget,
+  DefenderBlockFitness,
 } from "./llm.ts";
 export type { Persona, TargetResponse, JudgeResult } from "./llm.ts";
 export { TaxonomyLabel, TAXONOMY_VERSION, owaspIds, atlasIds } from "./taxonomy.ts";
@@ -54,4 +66,5 @@ export {
   runL3,
   runL4MultiTurn,
   runL4Agentic,
+  runL5,
 } from "./conformance.ts";

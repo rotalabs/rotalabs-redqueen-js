@@ -5,8 +5,17 @@
  * L1 (engine determinism) is implemented here. L2/L3 (LLM domain + report)
  * land with the TypeScript LLM-domain port.
  */
-import { evolve, BehaviorDimension, MapElitesArchive } from "./engine.ts";
-import { AgenticGenome, JailbreakFitness, LLMAttackGenome, MockTarget, MultiTurnGenome } from "./llm.ts";
+import { coevolve, evolve, BehaviorDimension, MapElitesArchive } from "./engine.ts";
+import {
+  AgenticGenome,
+  DefenderBlockFitness,
+  HeuristicJudge,
+  JailbreakFitness,
+  LLMAttackGenome,
+  MockTarget,
+  MultiTurnGenome,
+  SystemPromptDefense,
+} from "./llm.ts";
 import { ReportExporter } from "./report.ts";
 import type { Rng } from "./rng.ts";
 import {
@@ -141,4 +150,25 @@ export async function runL4Agentic(seed: number = CONFORMANCE_SEED): Promise<Rec
     archive,
   });
   return archive.toDict();
+}
+
+/** L5: competitive co-evolution determinism (attacker vs defender). */
+export async function runL5(seed: number = CONFORMANCE_SEED): Promise<Record<string, unknown>> {
+  const baseTarget = new MockTarget();
+  const judge = new HeuristicJudge();
+  const result = await coevolve(
+    LLMAttackGenome,
+    SystemPromptDefense,
+    (d) => new JailbreakFitness((d as SystemPromptDefense).asDefense(baseTarget), judge),
+    (a) => new DefenderBlockFitness(a, baseTarget, judge),
+    { generations: 15, populationSize: 24, seed },
+  );
+  return {
+    best_attacker: result.bestAttacker.toDict(),
+    best_defender: result.bestDefender.toDict(),
+    attacker_fitness: result.attackerFitness,
+    defender_fitness: result.defenderFitness,
+    generations: result.generations,
+    history: result.history,
+  };
 }

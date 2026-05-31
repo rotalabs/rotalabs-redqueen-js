@@ -8,6 +8,7 @@ import {
   runL3,
   runL4MultiTurn,
   runL4Agentic,
+  runL5,
   CONFORMANCE_SEED,
 } from "../src/conformance.ts";
 
@@ -38,6 +39,12 @@ test("L4 multi-turn determinism reproduces the Python golden byte-for-byte", asy
 test("L4 agentic determinism reproduces the Python golden byte-for-byte", async () => {
   const golden = readFileSync(new URL("./fixtures/L4_agentic.json", import.meta.url), "utf8");
   const produced = canonicalJson(await runL4Agentic(CONFORMANCE_SEED)) + "\n";
+  assert.equal(produced, golden);
+});
+
+test("L5 co-evolution determinism reproduces the Python golden byte-for-byte", async () => {
+  const golden = readFileSync(new URL("./fixtures/L5_coevolution.json", import.meta.url), "utf8");
+  const produced = canonicalJson(await runL5(CONFORMANCE_SEED)) + "\n";
   assert.equal(produced, golden);
 });
 
