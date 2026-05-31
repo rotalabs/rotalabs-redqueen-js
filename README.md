@@ -47,22 +47,41 @@ const report = new ReportExporter().export(result.archive!.getAll(), {
 console.log(report.toDict());
 ```
 
+## Other surfaces and real targets
+
+```ts
+import { MultiTurnGenome, AgenticGenome, OpenAITarget, MCPTarget } from "@rotalabs/redqueen";
+
+// swap the genome class to evolve multi-turn or agentic attacks with the same engine
+await evolve(MultiTurnGenome, new JailbreakFitness(new MockTarget()), { generations: 50, seed: 1 });
+
+// real targets (need API keys, except Ollama which is local)
+new OpenAITarget({ model: "gpt-4o-mini" }); // also AnthropicTarget / GeminiTarget / OllamaTarget
+
+// red-team a tool-using agent over the Model Context Protocol (stdio)
+new MCPTarget(["npx", "-y", "@modelcontextprotocol/server-everything"]);
+```
+
 ## What's included
 
 - **Engine** — `Rng` (canonical xoshiro256++/SplitMix64), `Population`, `TournamentSelection`,
   `LexicaseSelection`, `MapElitesArchive`, `evolve`, and canonical JSON.
-- **LLM domain (single-turn)** — `LLMAttackGenome`, targets (`MockTarget` + `LLMTarget` base),
-  `HeuristicJudge`, `JailbreakFitness`.
+- **Attack surfaces** — `LLMAttackGenome` (single-turn), `MultiTurnGenome` (Crescendo-style),
+  `AgenticGenome` (tool-use / MCP).
+- **Targets** — `OpenAITarget`, `AnthropicTarget`, `GeminiTarget`, `OllamaTarget`, `MockTarget`,
+  and `MCPTarget` (drives a real MCP server over stdio JSON-RPC). Plus the `LLMTarget` base and
+  `createTarget`.
+- **Judges & fitness** — `HeuristicJudge`, `JailbreakFitness`, `MultiTargetFitness` (cross-model transfer).
+- **Co-evolution** — `coevolve`, `SystemPromptDefense`, `DefenderBlockFitness`.
 - **Compliance** — `ReportExporter` / `TaxonomyLabel` (OWASP / MITRE ATLAS / EU AI Act / NIST).
-- **Conformance** — `runL1` / `runL2` / `runL3` reproduce the shared Python goldens byte-for-byte.
+- **Conformance** — `runL1`…`runL5` reproduce the shared Python goldens byte-for-byte.
 
-The multi-turn (`MultiTurnGenome`) and agentic (`AgenticGenome`) surfaces ship in the Python package
-today and land here next, gated on the same corpus.
+This is at feature parity with the Python package; both are gated on the same conformance corpus.
 
 ## Cross-language conformance
 
 ```bash
-npm test        # PRNG vectors + L1/L2/L3 conformance against the shared goldens
+npm test        # PRNG vectors + L1-L5 conformance + provider/MCP tests
 npm run build   # emit dist/ (js + d.ts)
 ```
 
