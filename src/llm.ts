@@ -515,6 +515,233 @@ export class JailbreakFitness implements Fitness {
   }
 }
 
+// --- Provider targets ---------------------------------------------------------
+
+export class TargetError extends Error {}
+export class RateLimitError extends TargetError {}
+export class NetworkError extends TargetError {}
+
+type FetchFn = typeof fetch;
+
+interface ProviderOptions {
+  model?: string;
+  apiKey?: string;
+  maxTokens?: number;
+  fetchFn?: FetchFn;
+}
+
+export class OpenAITarget extends LLMTarget {
+  model: string;
+  apiKey: string | undefined;
+  maxTokens: number;
+  private fetchFn: FetchFn;
+
+  constructor(opts: ProviderOptions = {}) {
+    super();
+    this.model = opts.model ?? "gpt-4";
+    this.apiKey = opts.apiKey ?? process.env.OPENAI_API_KEY;
+    this.maxTokens = opts.maxTokens ?? 1000;
+    this.fetchFn = opts.fetchFn ?? fetch;
+    if (!this.apiKey) throw new Error("OpenAI API key required");
+  }
+  override get name(): string {
+    return `openai:${this.model}`;
+  }
+  override async complete(messages: Message[]): Promise<TargetResponse> {
+    let response: Response;
+    try {
+      response = await this.fetchFn("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: this.model,
+          messages: messages.map((m) => ({ role: m.role, content: m.content })),
+          max_tokens: this.maxTokens,
+        }),
+      });
+    } catch (e) {
+      throw new NetworkError(`Network error: ${e}`);
+    }
+    if (response.status === 429) throw new RateLimitError("OpenAI rate limit exceeded");
+    if (!response.ok) throw new TargetError(`OpenAI API error: ${response.status}`);
+    const data = (await response.json()) as Record<string, any>;
+    return {
+      content: data.choices[0].message.content,
+      model: this.model,
+      tokensUsed: data.usage?.total_tokens ?? 0,
+      latencyMs: 0,
+    };
+  }
+}
+
+export class AnthropicTarget extends LLMTarget {
+  model: string;
+  apiKey: string | undefined;
+  maxTokens: number;
+  private fetchFn: FetchFn;
+
+  constructor(opts: ProviderOptions = {}) {
+    super();
+    this.model = opts.model ?? "claude-sonnet-4-20250514";
+    this.apiKey = opts.apiKey ?? process.env.ANTHROPIC_API_KEY;
+    this.maxTokens = opts.maxTokens ?? 1000;
+    this.fetchFn = opts.fetchFn ?? fetch;
+    if (!this.apiKey) throw new Error("Anthropic API key required");
+  }
+  override get name(): string {
+    return `anthropic:${this.model}`;
+  }
+  override async complete(messages: Message[]): Promise<TargetResponse> {
+    const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n");
+    const convo = messages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({ role: m.role, content: m.content }));
+    const payload: Record<string, unknown> = {
+      model: this.model,
+      messages: convo,
+      max_tokens: this.maxTokens,
+    };
+    if (system) payload.system = system;
+
+    let response: Response;
+    try {
+      response = await this.fetchFn("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": this.apiKey ?? "",
+          "anthropic-version": "2023-06-01",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (e) {
+      throw new NetworkError(`Network error: ${e}`);
+    }
+    if (response.status === 429) throw new RateLimitError("Anthropic rate limit exceeded");
+    if (!response.ok) throw new TargetError(`Anthropic API error: ${response.status}`);
+    const data = (await response.json()) as Record<string, any>;
+    const usage = data.usage ?? {};
+    return {
+      content: data.content[0].text,
+      model: this.model,
+      tokensUsed: (usage.input_tokens ?? 0) + (usage.output_tokens ?? 0),
+      latencyMs: 0,
+    };
+  }
+}
+
+export class GeminiTarget extends LLMTarget {
+  model: string;
+  apiKey: string | undefined;
+  maxTokens: number;
+  private fetchFn: FetchFn;
+
+  constructor(opts: ProviderOptions = {}) {
+    super();
+    this.model = opts.model ?? "gemini-2.0-flash";
+    this.apiKey = opts.apiKey ?? process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY;
+    this.maxTokens = opts.maxTokens ?? 1000;
+    this.fetchFn = opts.fetchFn ?? fetch;
+    if (!this.apiKey) throw new Error("Gemini API key required");
+  }
+  override get name(): string {
+    return `gemini:${this.model}`;
+  }
+  override async complete(messages: Message[]): Promise<TargetResponse> {
+    const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n");
+    const contents = messages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] }));
+    const payload: Record<string, unknown> = {
+      contents,
+      generationConfig: { maxOutputTokens: this.maxTokens },
+    };
+    if (system) payload.systemInstruction = { parts: [{ text: system }] };
+
+    const url =
+      `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent` +
+      `?key=${this.apiKey}`;
+    let response: Response;
+    try {
+      response = await this.fetchFn(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (e) {
+      throw new NetworkError(`Network error: ${e}`);
+    }
+    if (response.status === 429) throw new RateLimitError("Gemini rate limit exceeded");
+    if (!response.ok) throw new TargetError(`Gemini API error: ${response.status}`);
+    const data = (await response.json()) as Record<string, any>;
+    const parts = data.candidates[0].content.parts as { text?: string }[];
+    return {
+      content: parts.map((p) => p.text ?? "").join(""),
+      model: this.model,
+      tokensUsed: data.usageMetadata?.totalTokenCount ?? 0,
+      latencyMs: 0,
+    };
+  }
+}
+
+export class OllamaTarget extends LLMTarget {
+  model: string;
+  baseUrl: string;
+  private fetchFn: FetchFn;
+
+  constructor(opts: { model?: string; baseUrl?: string; fetchFn?: FetchFn } = {}) {
+    super();
+    this.model = opts.model ?? "llama2";
+    this.baseUrl = opts.baseUrl ?? "http://localhost:11434";
+    this.fetchFn = opts.fetchFn ?? fetch;
+  }
+  override get name(): string {
+    return `ollama:${this.model}`;
+  }
+  override async complete(messages: Message[]): Promise<TargetResponse> {
+    let response: Response;
+    try {
+      response = await this.fetchFn(`${this.baseUrl}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: this.model,
+          messages: messages.map((m) => ({ role: m.role, content: m.content })),
+          stream: false,
+        }),
+      });
+    } catch (e) {
+      throw new NetworkError(`Network error: ${e}`);
+    }
+    if (!response.ok) throw new TargetError(`Ollama API error: ${response.status}`);
+    const data = (await response.json()) as Record<string, any>;
+    return {
+      content: data.message.content,
+      model: this.model,
+      tokensUsed: data.eval_count ?? 0,
+      latencyMs: 0,
+    };
+  }
+}
+
+export function createTarget(spec: string): LLMTarget {
+  const [provider, model] = spec.split(":", 2);
+  switch (provider.toLowerCase()) {
+    case "openai":
+      return new OpenAITarget({ model: model || "gpt-4" });
+    case "anthropic":
+      return new AnthropicTarget({ model: model || "claude-sonnet-4-20250514" });
+    case "gemini":
+      return new GeminiTarget({ model: model || "gemini-2.0-flash" });
+    case "ollama":
+      return new OllamaTarget({ model: model || "llama2" });
+    case "mock":
+      return new MockTarget(model || "random");
+    default:
+      throw new Error(`Unknown provider: ${provider}`);
+  }
+}
+
 // --- Co-evolution: defenses ---------------------------------------------------
 
 /** Wraps a target, prepending a defense system prompt to every completion. */
