@@ -20,3 +20,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm publish --access public --provenance
+        env:
+          # setup-node exports a placeholder NODE_AUTH_TOKEN that otherwise
+          # shadows the OIDC handshake; clearing it forces Trusted Publishing.
+          NODE_AUTH_TOKEN: ""
