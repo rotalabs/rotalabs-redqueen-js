@@ -26,7 +26,10 @@
   "homepage": "https://rotalabs.ai",
   "repository": {
     "type": "git",
-    "url": "https://github.com/rotalabs/rotalabs-redqueen.git"
+    "url": "https://github.com/rotalabs/rotalabs-redqueen-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rotalabs/rotalabs-redqueen-js/issues"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
