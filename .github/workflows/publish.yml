@@ -16,11 +16,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24" # bundles npm >= 11.5.1, required for Trusted Publishing OIDC
-          registry-url: "https://registry.npmjs.org"
+          # No registry-url on purpose: it writes an _authToken line into .npmrc
+          # which makes npm skip the OIDC handshake. The default registry is
+          # npmjs.org, which is what Trusted Publishing authenticates against.
       - run: npm ci
       - run: npm run build
       - run: npm publish --access public --provenance
-        env:
-          # setup-node exports a placeholder NODE_AUTH_TOKEN that otherwise
-          # shadows the OIDC handshake; clearing it forces Trusted Publishing.
-          NODE_AUTH_TOKEN: ""
