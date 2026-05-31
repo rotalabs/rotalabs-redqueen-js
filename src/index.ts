@@ -64,6 +64,7 @@ export {
   DefenderBlockFitness,
 } from "./llm.ts";
 export type { Persona, TargetResponse, JudgeResult } from "./llm.ts";
+export { MCPTarget } from "./mcp.ts";
 export { TaxonomyLabel, TAXONOMY_VERSION, owaspIds, atlasIds } from "./taxonomy.ts";
 export { Report, ReportExporter, REPORT_VERSION } from "./report.ts";
 export {

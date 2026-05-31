@@ -310,6 +310,8 @@ export class LLMTarget {
   async query(prompt: string): Promise<TargetResponse> {
     return this.complete([{ role: "user", content: prompt }]);
   }
+
+  async close(): Promise<void> {}
   async interact(stimulus: Stimulus): Promise<Transcript> {
     if (stimulus.kind === SINGLE_TURN) {
       const messages: Message[] = [];
