@@ -21,4 +21,10 @@ jobs:
           # npmjs.org, which is what Trusted Publishing authenticates against.
       - run: npm ci
       - run: npm run build
-      - run: npm publish --access public --provenance
+      - name: oidc diagnostics
+        run: |
+          echo "node=$(node -v) npm=$(npm -v)"
+          echo "registry=$(npm config get registry)"
+          node -e "console.log('OIDC_request_url_present=' + !!process.env.ACTIONS_ID_TOKEN_REQUEST_URL)"
+          echo "NODE_AUTH_TOKEN_present=${NODE_AUTH_TOKEN:+yes}"
+      - run: npm publish --access public --provenance --loglevel verbose 2>&1
