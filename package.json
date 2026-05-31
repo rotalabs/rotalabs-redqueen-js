@@ -1,0 +1,35 @@
+{
+  "name": "@rotalabs/redqueen",
+  "version": "0.1.0",
+  "description": "Quality-diversity evolutionary red-teaming for LLMs and agents (single-turn, multi-turn, agentic/MCP)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test test/*.test.ts"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["ai", "trust", "red-teaming", "llm-security", "agentic", "mcp", "machine-learning", "rotalabs"],
+  "author": "Rotalabs <dev@rotalabs.ai>",
+  "license": "AGPL-3.0-or-later",
+  "homepage": "https://rotalabs.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rotalabs/rotalabs-redqueen.git"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}
