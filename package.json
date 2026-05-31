@@ -1,6 +1,6 @@
 {
   "name": "@rotalabs/redqueen",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "description": "Quality-diversity evolutionary red-teaming for LLMs and agents (single-turn, multi-turn, agentic/MCP)",
   "type": "module",
   "main": "./dist/index.js",
