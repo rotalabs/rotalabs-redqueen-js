@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: If you use this software, please cite it using the metadata below.
+title: @rotalabs/redqueen
+type: software
+authors:
+  - family-names: Mitra
+    given-names: Subhadip
+    email: subhadip@rotalabs.ai
+    affiliation: Rotalabs
+license: AGPL-3.0-or-later
+version: "2.0.0"
+date-released: "2026-07-12"
+repository-code: https://github.com/rotalabs/rotalabs-redqueen-js
+url: https://rotalabs.ai
