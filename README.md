@@ -100,4 +100,4 @@ For **defensive security research** — testing systems you own or are authorize
 
 ## License
 
-AGPL-3.0-or-later.
+AGPL-3.0-or-later. Red Queen is dual-licensed: if the AGPL's terms don't fit your use case (e.g. embedding in a proprietary product or offering it as a hosted service), commercial licenses are available — contact [research@rotalabs.ai](mailto:research@rotalabs.ai).
